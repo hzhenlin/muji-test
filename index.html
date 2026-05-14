@@ -281,32 +281,29 @@
 
             if (!name || !start || !end) { alert('請填寫完整名稱與日期'); return; }
 
-            const btn = document.getElementById('btn-submit');
-            const originalText = btn.innerText;
-            btn.innerText = "正在上傳至雲端..."; 
-            btn.disabled = true;
-
-            const newAct = { 
-                name: name, 
-                type: type, 
-                startDate: start, 
-                endDate: end, 
-                details: details 
-            };
+            // 使用 URLSearchParams 格式，這是 GAS 最容易接收的格式
+            const params = new URLSearchParams();
+            params.append('name', name);
+            params.append('type', type);
+            params.append('startDate', start);
+            params.append('endDate', end);
+            params.append('details', details);
 
             try {
-                // 不使用 no-cors，讓 browser 處理可能的 redirect
                 await fetch(GOOGLE_API_URL, {
                     method: "POST",
-                    body: JSON.stringify(newAct)
+                    mode: "no-cors", // 關鍵：避開 CORS 錯誤
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    body: params.toString()
                 });
                 
-                alert('資料已同步！');
+                alert('資料已發送！請稍候 3-5 秒再重新整理網頁查看。');
                 location.reload(); 
             } catch (e) {
-                // 由於 GAS 的 CORS 限制，即使成功有時也會進入 catch，所以重整即可
-                console.log("網路請求完成（可能有 CORS 警告，正常現象）");
-                location.reload();
+                console.error("發送失敗:", e);
+                alert('發送失敗，請檢查網路連線。');
             }
         }
 
