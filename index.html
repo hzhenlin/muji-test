@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>活動管理看板</title>
+    <style>
+        /* 無印風格基礎設定 */
+        html {
+            scroll-behavior: smooth; /* 啟用平滑滾動 */
+            scroll-padding-top: 20px; /* 滾動跳轉時上方留出舒適空隙 */
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+            background-color: #F9F6F0; 
+            color: #3A3A3A;            
+            margin: 0;
+            padding: 40px 20px 40px 180px; /* 左邊留出空間給側邊欄 */
+            line-height: 1.6;
+            transition: padding 0.3s ease;
+        }
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 1.6rem;
+            font-weight: 400;
+            text-align: center;
+            color: #2B2B2B;
+            margin-bottom: 30px;
+            letter-spacing: 2px;
+        }
+
+        /* 固定式側邊欄 */
+        .sidebar {
+            position: fixed;
+            top: 40px;
+            left: 30px;
+            width: 120px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 100;
+        }
+        .sidebar-title {
+            font-size: 0.75rem;
+            color: #A69E92;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+            padding-left: 8px;
+            text-transform: uppercase;
+        }
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .sidebar-link {
+            display: block;
+            background: none;
+            border: none;
+            color: #8C8476;
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            text-align: left;
+            cursor: pointer;
+            border-radius: 4px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            letter-spacing: 0.5px;
+        }
+        .sidebar-link:hover {
+            background: #F1ECE4;
+            color: #3A3A3A;
+        }
+        .sidebar.hidden {
+            display: none;
+        }
+
+        /* 分頁標籤樣式 */
+        .tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #D1C9BC;
+        }
+        .tab-button {
+            background: none;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            cursor: pointer;
+            color: #8C8476;
+            letter-spacing: 1px;
+            position: relative;
+            bottom: -1px;
+        }
+        .tab-button.active {
+            color: #2B2B2B;
+            border-bottom: 2px solid #8C8476;
+            font-weight: 500;
+        }
+
+        /* 輸入表單區塊 */
+        .form-section {
+            background: #F1ECE4;
+            padding: 20px;
+            border-radius: 4px;
+            margin-bottom: 40px; /* 移除工具列後，回復舒適的下邊距 */
+        }
+        .form-section h3 {
+            margin-top: 0;
+            font-size: 1rem;
+            font-weight: 500;
+            color: #555;
+            margin-bottom: 15px;
+        }
+        .form-group {
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+        }
+        .form-group-row {
+            display: flex;
+            gap: 15px;
+        }
+        .form-group-row .form-group {
+            flex: 1;
+        }
+        .radio-group {
+            flex-direction: row;
+            gap: 20px;
+            align-items: center;
+            padding: 5px 0;
+        }
+        .radio-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            color: #3A3A3A;
+        }
+        .radio-label input {
+            cursor: pointer;
+            accent-color: #6E756A; 
+        }
+        label {
+            font-size: 0.85rem;
+            color: #6E756A;
+            margin-bottom: 4px;
+        }
+        input[type="text"], input[type="date"], textarea {
+            border: 1px solid #D1C9BC;
+            background: #FFF;
+            padding: 8px 12px;
+            font-size: 0.9rem;
+            color: #3A3A3A;
+            border-radius: 2px;
+            outline: none;
+            font-family: inherit;
+        }
+        input:focus, textarea:focus {
+            border-color: #8C8476;
+        }
+        .btn-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+        }
+        .submit-btn {
+            background: #6E756A;
+            color: white;
+            border: none;
+            padding: 10px;
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+            cursor: pointer;
+            border-radius: 2px;
+            flex: 2;
+        }
+        .submit-btn:hover { background: #5B6257; }
+        .cancel-btn {
+            background: #D1C9BC;
+            color: #3A3A3A;
+            border: none;
+            padding: 10px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            border-radius: 2px;
+            flex: 1;
+            display: none;
+        }
+        
+        /* 頁面區塊切換 */
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* 大區塊與小分類標題 */
+        .section { margin-bottom: 40px; }
+        .section-title {
+            font-weight: 600;   
+            margin-top: 0;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #D1C9BC; 
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
+        .category-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #8C8476;
+            letter-spacing: 1px;
+            margin: 20px 0 5px 0;
+            padding-left: 4px;
+        }
+        
+        /* 標題層級 */
+        #upcoming-section .section-title { font-size: 1.2rem; color: #5E6D7E; border-bottom-color: #DDE2E6; } 
+        #ending-section .section-title { font-size: 1.2rem; color: #8C6B6B; border-bottom-color: #E6DDDD; } 
+        #all-section .section-title { font-size: 1.3rem; color: #6E655F; }
+
+        /* 進行中欄位專屬特殊樣式（顯眼且淡雅） */
+        #current-section {
+            margin-bottom: 50px;
+            background-color: #F4F1EA; 
+            padding: 20px 15px;
+            border-radius: 6px;
+            border: 1px solid #E6DFD5;
+        }
+        #current-section .section-title { 
+            font-size: 1.5rem; 
+            color: #4A5644;    
+            border-bottom: 2px solid #A2AE9C; 
+            padding-bottom: 8px;
+        }
+        #current-section .category-title {
+            color: #6E7B68;
+        }
+
+        /* 列表與內容樣式 */
+        ul { list-style: none; padding: 0; margin: 0; }
+        li {
+            padding: 18px 4px;
+            border-bottom: 1px solid #E6DFD5; 
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 15px;
+        }
+        li:last-child { border-bottom: none; }
+        
+        .activity-info { flex: 1; }
+        .activity-name { font-size: 1rem; display: block; margin-bottom: 6px; }
+        
+        /* 品項新排列：序號置於最前方 */
+        .detail-item {
+            display: flex;
+            align-items: flex-start;
+            font-size: 0.85rem;
+            color: #8C8476;
+            margin-bottom: 3px;
+            padding: 2px 0;
+        }
+        .detail-num {
+            font-family: monospace;
+            color: #BDB6A8;
+            font-size: 0.8rem;
+            margin-right: 8px; 
+            white-space: nowrap;
+        }
+        .detail-text { flex: 1; }
+        
+        /* 右側日期與操作區 */
+        .activity-right {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+            min-width: 140px;
+        }
+        .activity-date { font-size: 0.85rem; color: #8C8476; white-space: nowrap; }
+        
+        /* 操作連結 */
+        .action-links { font-size: 0.8rem; color: #A69E92; }
+        .action-links a { color: #8C8476; text-decoration: none; margin-left: 10px; cursor: pointer; }
+        .action-links a:hover { color: #3A3A3A; text-decoration: underline; }
+        .action-links a.delete-link:hover { color: #A94444; }
+
+        /* 特殊狀態樣式 */
+        .status-starting-this-week { padding-left: 12px; border-left: 2px solid #7E8D9E; }
+        .status-starting-this-week .activity-name { color: #4A5663; }
+        .status-ending-this-week { padding-left: 12px; border-left: 2px solid #9E7E7E; }
+        .status-ending-today .activity-name { color: #A94444; }
+        .badge {
+            background: #A94444; color: #FFF; padding: 2px 8px;
+            border-radius: 2px; font-size: 0.75rem; margin-left: 8px; font-weight: normal;
+        }
+        .empty-message { color: #A69E92; font-size: 0.85rem; padding: 10px 4px; font-style: italic; }
+
+        /* 📱 RWD 響應式微調 */
+        @media (max-width: 900px) {
+            body { padding-left: 20px; }
+            .sidebar { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar" id="看板側邊欄">
+        <div class="sidebar-title">快速跳轉</div>
+        <div class="sidebar-nav">
+            <button class="sidebar-link" onclick="scrollToSection('upcoming-section')">↳ 將要開始</button>
+            <button class="sidebar-link" onclick="scrollToSection('current-section')" style="color: #4A5644; font-weight: 500;">↳ 進行中</button>
+            <button class="sidebar-link" onclick="scrollToSection('ending-section')">↳ 將要結束</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h1>活動動態管理</h1>
+
+        <div class="form-section">
+            <h3 id="form-title">新增活動資料</h3>
+            
+            <div class="form-group-row">
+                <div class="form-group" style="flex: 2;">
+                    <label>活動名稱</label>
+                    <input type="text" id="input-name" placeholder="例如：秋季新品在地食材展">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>活動類別</label>
+                    <div class="form-group radio-group">
+                        <label class="radio-label"><input type="radio" name="input-type" value="food" checked> 食品</label>
+                        <label class="radio-label"><input type="radio" name="input-type" value="goods"> 生雜</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group-row">
+                <div class="form-group">
+                    <label>開始時間</label>
+                    <input type="date" id="input-start">
+                </div>
+                <div class="form-group">
+                    <label>結束時間</label>
+                    <input type="date" id="input-end">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>活動品項細項（輸入一項後按 Enter 換行）</label>
+                <textarea id="input-details" rows="3" placeholder="例如：&#10;無油炸即食麵優惠&#10;宇治抹茶入玄米茶"></textarea>
+            </div>
+            <div class="btn-container">
+                <button class="submit-btn" id="btn-submit" onclick="saveActivity()">新增至系統</button>
+                <button class="cancel-btn" id="btn-cancel" onclick="clearForm()">取消編輯</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-button active" id="tab-home" onclick="switchPage('home')">首頁看板</button>
+            <button class="tab-button" id="tab-all" onclick="switchPage('all')">所有活動查詢</button>
+        </div>
+
+        <div id="page-home" class="page active">
+            <div id="upcoming-section" class="section">
+                <h2 class="section-title">本週即將開始</h2>
+                <div class="category-title">［ 食品類 ］</div>
+                <ul id="upcoming-food-list"></ul>
+                <div class="category-title">［ 生雜類 ］</div>
+                <ul id="upcoming-goods-list"></ul>
+            </div>
+
+            <div id="current-section" class="section">
+                <h2 class="section-title">進行中</h2>
+                <div class="category-title">［ 食品類 ］</div>
+                <ul id="current-food-list"></ul>
+                <div class="category-title">［ 生雜類 ］</div>
+                <ul id="current-goods-list"></ul>
+            </div>
+
+            <div id="ending-section" class="section">
+                <h2 class="section-title">本週即將結束</h2>
+                <div class="category-title">［ 食品類 ］</div>
+                <ul id="ending-food-list"></ul>
+                <div class="category-title">［ 生雜類 ］</div>
+                <ul id="ending-goods-list"></ul>
+            </div>
+        </div>
+
+        <div id="page-all" class="page">
+            <div id="all-section" class="section">
+                <h2 class="section-title">歷年及未來所有活動</h2>
+                <div class="category-title">［ 食品類 ］</div>
+                <ul id="all-food-list"></ul>
+                <div class="category-title">［ 生雜類 ］</div>
+                <ul id="all-goods-list"></ul>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // 預設核心資料
+        let defaultActivities = [
+            { id: 1715700000001, type: "food", name: "門市即溶咖啡節", startDate: "2026-05-14", endDate: "2026-05-15", details: "炭焙即溶系列 9 折\n黑咖啡禮盒預購" },
+            { id: 1715700000002, type: "goods", name: "有機棉織品限時優惠", startDate: "2026-05-16", endDate: "2026-05-20", details: "男女有機棉服飾折扣\n居家寢具三件組特價" },
+            { id: 1715700000003, type: "food", name: "下個月在地即食麵展", startDate: "2026-06-01", endDate: "2026-06-10", details: "非本週活動不顯示於首頁" }
+        ];
+
+        let activities = JSON.parse(localStorage.getItem('muji_activities_v6')) || defaultActivities;
+        let editId = null;
+
+        function updateLocalStorage() {
+            localStorage.setItem('muji_activities_v6', JSON.stringify(activities));
+        }
+
+        // 點擊側邊欄按鈕平滑滾動至特定區塊
+        function scrollToSection(sectionId) {
+            const target = document.getElementById(sectionId);
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        // 分頁切換
+        function switchPage(pageName) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            const sidebar = document.getElementById('看板側邊欄');
+            
+            if(pageName === 'home') {
+                document.getElementById('page-home').classList.add('active');
+                document.getElementById('tab-home').classList.add('active');
+                sidebar.classList.remove('hidden'); 
+                renderDashboard();
+            } else {
+                document.getElementById('page-all').classList.add('active');
+                document.getElementById('tab-all').classList.add('active');
+                sidebar.classList.add('hidden'); 
+                renderAllList();
+            }
+        }
+
+        function getThisWeekRange() {
+            const today = new Date(); today.setHours(0,0,0,0);
+            const currentDay = today.getDay(); 
+            const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay; 
+            
+            const monday = new Date(today); monday.setDate(today.getDate() + distanceToMonday);
+            const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+            sunday.setHours(23,59,59,999);
+
+            return { today, monday, sunday };
+        }
+
+        function saveActivity() {
+            const name = document.getElementById('input-name').value;
+            const type = document.querySelector('input[name="input-type"]:checked').value;
+            const start = document.getElementById('input-start').value;
+            const end = document.getElementById('input-end').value;
+            const details = document.getElementById('input-details').value;
+
+            if (!name || !start || !end) {
+                alert('請完整填寫活動名稱與時間。');
+                return;
+            }
+
+            if (editId) {
+                const index = activities.findIndex(act => act.id === editId);
+                if (index !== -1) {
+                    activities[index] = { id: editId, type, name, startDate: start, endDate: end, details };
+                }
+                editId = null;
+                alert('資料已修改！');
+            } else {
+                activities.push({ id: Date.now(), type, name, startDate: start, endDate: end, details });
+                alert('新活動已錄入！');
+            }
+
+            updateLocalStorage();
+            clearForm();
+            renderDashboard();
+            renderAllList();
+        }
+
+        function editActivity(id) {
+            const act = activities.find(a => a.id === id);
+            if (!act) return;
+
+            document.getElementById('input-name').value = act.name;
+            document.querySelector(`input[name="input-type"][value="${act.type}"]`).checked = true;
+            document.getElementById('input-start').value = act.startDate;
+            document.getElementById('input-end').value = act.endDate;
+            document.getElementById('input-details').value = act.details;
+
+            editId = id;
+            document.getElementById('form-title').innerText = "修改活動資料";
+            document.getElementById('btn-submit').innerText = "儲存修改";
+            document.getElementById('btn-cancel').style.display = "block";
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function deleteActivity(id) {
+            if (confirm('確定要刪除這項活動嗎？')) {
+                activities = activities.filter(act => act.id !== id);
+                updateLocalStorage();
+                if (editId === id) clearForm();
+                renderDashboard();
+                renderAllList();
+            }
+        }
+
+        function clearForm() {
+            editId = null;
+            document.getElementById('input-name').value = '';
+            document.querySelector('input[name="input-type"][value="food"]').checked = true;
+            document.getElementById('input-start').value = '';
+            document.getElementById('input-end').value = '';
+            document.getElementById('input-details').value = '';
+            document.getElementById('form-title').innerText = "新增活動資料";
+            document.getElementById('btn-submit').innerText = "新增至系統";
+            document.getElementById('btn-cancel').style.display = "none";
+        }
+
+        function parseDetailsToHtml(detailsStr) {
+            if (!detailsStr || detailsStr.trim() === "") return "";
+            const lines = detailsStr.split('\n').map(line => line.trim()).filter(line => line !== "");
+            return lines.map((line, index) => {
+                const numStr = String(index + 1).padStart(2, '0') + '.';
+                return `
+                    <div class="detail-item">
+                        <span class="detail-num">${numStr}</span>
+                        <span class="detail-text">${line}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function createActionButtons(id) {
+            return `
+                <div class="action-links">
+                    <a onclick="editActivity(${id})">修改</a>
+                    <a class="delete-link" onclick="deleteActivity(${id})">刪除</a>
+                </div>
+            `;
+        }
+
+        function sortByEndDate(array) {
+            return array.sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
+        }
+
+        function renderDashboard() {
+            const { today, sunday } = getThisWeekRange();
+
+            const upFood = document.getElementById('upcoming-food-list');
+            const upGoods = document.getElementById('upcoming-goods-list');
+            const curFood = document.getElementById('current-food-list');
+            const curGoods = document.getElementById('current-goods-list');
+            const endFood = document.getElementById('ending-food-list');
+            const endGoods = document.getElementById('ending-goods-list');
+            
+            upFood.innerHTML = upGoods.innerHTML = curFood.innerHTML = curGoods.innerHTML = endFood.innerHTML = endGoods.innerHTML = '';
+
+            let counts = { upFood: 0, upGoods: 0, curFood: 0, curGoods: 0, endFood: 0, endGoods: 0 };
+            const sortedActivities = sortByEndDate([...activities]);
+
+            sortedActivities.forEach(act => {
+                const actStart = new Date(act.startDate); actStart.setHours(0,0,0,0);
+                const actEnd = new Date(act.endDate); actEnd.setHours(0,0,0,0);
+                const isCurrent = (today >= actStart && today <= actEnd);
+                
+                const isUpcomingThisWeek = (!isCurrent && actStart > today && actStart <= sunday);
+                const isEndingThisWeek = (isCurrent && actEnd <= sunday);
+
+                if (!isCurrent && !isUpcomingThisWeek) return; 
+
+                const li = document.createElement('li');
+                const detailsHtml = parseDetailsToHtml(act.details);
+                const actionsHtml = createActionButtons(act.id);
+
+                if (isEndingThisWeek) {
+                    li.className = 'status-ending-this-week';
+                    if (today.getTime() === actEnd.getTime()) {
+                        li.className += ' status-ending-today';
+                        li.innerHTML = `
+                            <div class="activity-info">
+                                <span class="activity-name">${act.name}<span class="badge">本日終了</span></span>
+                                ${detailsHtml}
+                            </div>
+                            <div class="activity-right">
+                                <span class="activity-date" style="color:#A94444;">今天結束 ⚠️</span>
+                                ${actionsHtml}
+                            </div>
+                        `;
+                    } else {
+                        li.innerHTML = `
+                            <div class="activity-info">
+                                <span class="activity-name">${act.name}</span>
+                                ${detailsHtml}
+                            </div>
+                            <div class="activity-right">
+                                <span class="activity-date">至 ${act.endDate} 止</span>
+                                ${actionsHtml}
+                            </div>
+                        `;
+                    }
+
+                    if(act.type === 'food') { endFood.appendChild(li); counts.endFood++; }
+                    else { endGoods.appendChild(li); counts.endGoods++; }
+                }
+                
+                if (isUpcomingThisWeek) {
+                    li.className = 'status-starting-this-week';
+                    li.innerHTML = `
+                        <div class="activity-info">
+                            <span class="activity-name">${act.name}</span>
+                            ${detailsHtml}
+                        </div>
+                        <div class="activity-right">
+                            <span class="activity-date">${act.startDate} 開跑</span>
+                            ${actionsHtml}
+                        </div>
+                    `;
+                    
+                    if(act.type === 'food') { upFood.appendChild(li); counts.upFood++; }
+                    else { upGoods.appendChild(li); counts.upGoods++; }
+                }
+                
+                if (isCurrent && !isEndingThisWeek) {
+                    li.innerHTML = `
+                        <div class="activity-info">
+                            <span class="activity-name">${act.name}</span>
+                            ${detailsHtml}
+                        </div>
+                        <div class="activity-right">
+                            <span class="activity-date">跨週進行中 ～ ${act.endDate}</span>
+                            ${actionsHtml}
+                        </div>
+                    `;
+                    
+                    if(act.type === 'food') { curFood.appendChild(li); counts.curFood++; }
+                    else { curGoods.appendChild(li); counts.curGoods++; }
+                }
+            });
+
+            if (counts.upFood === 0) upFood.innerHTML = '<div class="empty-message">本週尚無即將開始之食品活動</div>';
+            if (counts.upGoods === 0) upGoods.innerHTML = '<div class="empty-message">本週尚無即將開始之生雜活動</div>';
+            if (counts.curFood === 0) curFood.innerHTML = '<div class="empty-message">尚無跨週進行中之食品活動</div>';
+            if (counts.curGoods === 0) curGoods.innerHTML = '<div class="empty-message">尚無跨週進行中之生雜活動</div>';
+            if (counts.endFood === 0) endFood.innerHTML = '<div class="empty-message">本週無即將結束之食品活動</div>';
+            if (counts.endGoods === 0) endGoods.innerHTML = '<div class="empty-message">本週無即將結束之生雜活動</div>';
+        }
+
+        function renderAllList() {
+            const allFood = document.getElementById('all-food-list');
+            const allGoods = document.getElementById('all-goods-list');
+            
+            allFood.innerHTML = '';
+            allGoods.innerHTML = '';
+
+            let counts = { food: 0, goods: 0 };
+            const sortedActivities = sortByEndDate([...activities]);
+
+            sortedActivities.forEach(act => {
+                const li = document.createElement('li');
+                const detailsHtml = parseDetailsToHtml(act.details);
+                const actionsHtml = createActionButtons(act.id);
+                
+                li.innerHTML = `
+                    <div class="activity-info">
+                        <span class="activity-name">${act.name}</span>
+                        ${detailsHtml}
+                    </div>
+                    <div class="activity-right">
+                        <span class="activity-date">${act.startDate} 至 ${act.endDate}</span>
+                        ${actionsHtml}
+                    </div>
+                `;
+                
+                if (act.type === 'food') { allFood.appendChild(li); counts.food++; }
+                else { allGoods.appendChild(li); counts.goods++; }
+            });
+
+            if (counts.food === 0) allFood.innerHTML = '<div class="empty-message">無任何食品活動記錄</div>';
+            if (counts.goods === 0) allGoods.innerHTML = '<div class="empty-message">無 any 生雜活動記錄</div>';
+        }
+
+        renderDashboard();
+    </script>
+</body>
+</html>
