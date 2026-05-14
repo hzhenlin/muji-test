@@ -272,39 +272,35 @@
             }
         }
 
-        async function saveActivity() {
+        function saveActivity() {
             const name = document.getElementById('input-name').value;
             const type = document.querySelector('input[name="input-type"]:checked').value;
             const start = document.getElementById('input-start').value;
             const end = document.getElementById('input-end').value;
             const details = document.getElementById('input-details').value;
 
-            if (!name || !start || !end) { alert('請填寫完整名稱與日期'); return; }
+            if (!name || !start || !end) { alert('請填寫完整'); return; }
 
-            // 使用 URLSearchParams 格式，這是 GAS 最容易接收的格式
-            const params = new URLSearchParams();
-            params.append('name', name);
-            params.append('type', type);
-            params.append('startDate', start);
-            params.append('endDate', end);
-            params.append('details', details);
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", GOOGLE_API_URL, true);
+            xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
 
-            try {
-                await fetch(GOOGLE_API_URL, {
-                    method: "POST",
-                    mode: "no-cors", // 關鍵：避開 CORS 錯誤
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded"
-                    },
-                    body: params.toString()
-                });
-                
-                alert('資料已發送！請稍候 3-5 秒再重新整理網頁查看。');
-                location.reload(); 
-            } catch (e) {
-                console.error("發送失敗:", e);
-                alert('發送失敗，請檢查網路連線。');
-            }
+            // 拼裝字串
+            const data = "name=" + encodeURIComponent(name) +
+                        "&type=" + encodeURIComponent(type) +
+                        "&startDate=" + encodeURIComponent(start) +
+                        "&endDate=" + encodeURIComponent(end) +
+                        "&details=" + encodeURIComponent(details);
+
+            xhr.onreadystatechange = function() {
+                // 因為 GAS 跨域問題，這裡可能不會回傳 200，但資料通常已經進去了
+                if (xhr.readyState === 4) {
+                    alert("發送動作已完成，請檢查試算表！");
+                    location.reload();
+                }
+            };
+
+            xhr.send(data);
         }
 
         function renderAll() {
