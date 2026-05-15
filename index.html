@@ -170,7 +170,7 @@
             margin-top: 5px;
         }
         .submit-btn {
-            background: #6E756A;
+            background: #94243a;
             color: white;
             border: none;
             padding: 10px;
@@ -390,12 +390,22 @@
         </div>
 
         <div id="page-all" class="page">
-            <div id="all-section" class="section">
-                <h2 class="section-title">未來所有活動</h2>
+            <div class="section" id="all-section-current">
+                <h2 class="section-title" style="color: #7F0019; border-bottom-color: #7F0019;">● 進行中</h2>
                 <div class="category-title">［ 食品 ］</div>
-                <ul id="all-food-list"></ul>
+                <ul id="all-cur-food"></ul>
                 <div class="category-title">［ 生雜 ］</div>
-                <ul id="all-goods-list"></ul>
+                <ul id="all-cur-goods"></ul>
+            </div>
+
+            <hr style="border:0; border-top:1px dashed #D1C9BC; margin: 40px 0;">
+
+            <div class="section" id="all-section-upcoming">
+                <h2 class="section-title" style="color: #8C8476; border-bottom-color: #8C8476;">○ 未開始</h2>
+                <div class="category-title">［ 食品 ］</div>
+                <ul id="all-up-food"></ul>
+                <div class="category-title">［ 生雜 ］</div>
+                <ul id="all-up-goods"></ul>
             </div>
         </div>
 
@@ -588,10 +598,20 @@
         function switchPage(pageName) {
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-            document.getElementById('page-' + pageName).classList.add('active');
-            document.getElementById('tab-' + pageName).classList.add('active');
-        }
+            
+            const targetPage = document.getElementById('page-' + pageName);
+            const targetTab = document.getElementById('tab-' + pageName);
+            
+            if (targetPage) targetPage.classList.add('active');
+            if (targetTab) targetTab.classList.add('active');
 
+            // 關鍵：切換到所有活動頁面時，觸發渲染
+            if (pageName === 'all') {
+                renderAllList();
+            } else {
+                renderDashboard();
+            }
+        }
         function scrollToSection(id) {
             const el = document.getElementById(id);
             if(el) el.scrollIntoView({ behavior: 'smooth' });
@@ -660,40 +680,87 @@
             });
         }
         function renderAllList() {
-            const f = document.getElementById('all-food-list');
-            const g = document.getElementById('all-goods-list');
-            if(!f || !g) return;
-            f.innerHTML = g.innerHTML = '';
+            console.log("開始渲染所有活動清單...");
+            
+            // 1. 宣告日期（必須放在最前面）
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
 
+            // 2. 抓取容器
+            const cf = document.getElementById('all-cur-food');
+            const cg = document.getElementById('all-cur-goods');
+            const uf = document.getElementById('all-up-food');
+            const ug = document.getElementById('all-up-goods');
+
+            if (!cf || !cg || !uf || !ug) {
+                console.error("找不到 HTML ID，請確保 HTML 結構包含 all-cur-food 等 ID");
+                return;
+            }
+
+            // 3. 清空容器
+            cf.innerHTML = cg.innerHTML = uf.innerHTML = ug.innerHTML = '';
+
+            if (!activities || activities.length === 0) {
+                console.log("目前沒有活動資料");
+                return;
+            }
+
+            // 4. 開始循環資料
             activities.forEach(act => {
-                // 處理細項序號邏輯
-                const detailHtml = act.details ? act.details.split('\n').map((line, index) => {
-                    if (!line.trim()) return '';
-                    return `<div class="detail-item">
-                                <span class="detail-num">${String(index + 1).padStart(2, '0')}</span>
-                                <span class="detail-text">${line}</span>
-                            </div>`;
-                }).join('') : '';
+                try {
+                    const s = new Date(act.startDate);
+                    const e = new Date(act.endDate);
 
-                const li = document.createElement('li');
-                li.innerHTML = `
-                    <div class="activity-info">
-                        <span class="activity-name">${act.name}</span>
-                        <div style="font-size:0.75rem; color:#A69E92; margin-bottom: 6px;">
-                            ${toShortDate(act.startDate)} ~ ${toShortDate(act.endDate)}
+                    // 過濾已結束的
+                    if (today > e) return;
+
+                    const isCurrent = (today >= s && today <= e);
+                    const isFood = (act.type === 'food' || act.type === '食品');
+
+                    // 處理細項序號
+                    const detailHtml = act.details ? act.details.split('\n').map((line, index) => {
+                        if (!line.trim()) return '';
+                        return `<div class="detail-item">
+                                    <span class="detail-num">${String(index + 1).padStart(2, '0')}</span>
+                                    <span class="detail-text">${line}</span>
+                                </div>`;
+                    }).join('') : '';
+
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <div class="activity-info">
+                            <span class="activity-name">${act.name}</span>
+                            <div style="font-size:0.85rem; color:#8C8476; margin-bottom: 6px;">
+                                ${toShortDate(act.startDate)} ~ ${toShortDate(act.endDate)}
+                            </div>
+                            <div class="all-details-list">${detailHtml}</div>
                         </div>
-                        <div class="all-details-list">${detailHtml}</div>
-                    </div>
-                    <div class="activity-right">
-                        <div class="action-links">
-                            <a onclick="editActivity('${act.id}')">編輯</a>
-                            <a onclick="deleteActivity('${act.id}')" class="delete-link" style="color:#A94444">刪除</a>
-                        </div>
-                    </div>`;
-                
-                const isFood = (act.type === 'food' || act.type === '食品');
-                (isFood ? f : g).appendChild(li);
+                        <div class="activity-right">
+                            <div class="action-links">
+                                <a onclick="editActivity('${act.id}')">編輯</a>
+                                <a onclick="deleteActivity('${act.id}')" class="delete-link" style="color:#A94444">刪除</a>
+                            </div>
+                        </div>`;
+                    
+                    if (isCurrent) {
+                        (isFood ? cf : cg).appendChild(li);
+                    } else {
+                        (isFood ? uf : ug).appendChild(li);
+                    }
+                    
+                } catch (err) {
+                    console.error("渲染單筆資料錯誤:", err);
+                }
             });
+
+            // 5. 補上空狀態提示
+            [cf, cg, uf, ug].forEach(ul => {
+                if (ul.innerHTML === '') {
+                    ul.innerHTML = '<div class="empty-message">暫無活動</div>';
+                }
+            });
+            
+            console.log("所有活動渲染完成");
         }
     </script>
 </body>
