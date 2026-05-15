@@ -211,87 +211,67 @@
 </div>
 
 <script>
-    // ⚠️ 這裡請換成你最新的 GAS 網址
     const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycby25up1TY0XRYjagu85Bw5yAJmdYh_pLsszJRTF1TOssL0QFAN4ClPWNxPXr34uM-c/exec";
 
     let activities = [];
 
-    // 初始化：從試算表讀取資料
     window.onload = function() {
         document.getElementById('current-time').innerText = "Last update: " + new Date().toLocaleString();
         fetchData();
     };
 
-    // 讀取資料 (GET)ㄓ
     async function fetchData() {
         try {
             const resp = await fetch(GOOGLE_API_URL + "?t=" + new Date().getTime());
-            const data = await resp.json();
+            // 這裡定義了 data
+            const data = await resp.json(); 
             activities = data;
             renderBoard();
         } catch (e) {
-            console.error("讀取失敗:", e);
+            console.warn("讀取失敗，可能是雲端尚無資料:", e);
         }
     }
 
-    // 寫入資料 (POST)
-    function saveActivity() {
+    async function saveActivity() {
         const name = document.getElementById('input-name').value;
         const type = document.querySelector('input[name="input-type"]:checked').value;
         const start = document.getElementById('input-start').value;
         const end = document.getElementById('input-end').value;
         const details = document.getElementById('input-details').value;
 
-        if (!name || !start || !end) { alert('請填寫完整資訊'); return; }
+        if (!name || !start || !end) {
+            alert('請填寫完整資訊');
+            return;
+        }
 
         const btn = document.getElementById('btn-submit');
         btn.disabled = true;
-        btn.innerText = "正在傳送至雲端...";
+        btn.innerText = "傳送中...";
 
-        // --- 建立隱藏表單 ---
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = GOOGLE_API_URL;
-        form.target = 'hidden_iframe'; // 避免頁面跳轉
+        const params = new URLSearchParams();
+        params.append('name', name);
+        params.append('type', type);
+        params.append('startDate', start);
+        params.append('endDate', end);
+        params.append('details', details);
 
-        const data = {
-            name: name,
-            type: type,
-            startDate: start,
-            endDate: end,
-            details: details
-        };
+        try {
+            await fetch(GOOGLE_API_URL, {
+                method: "POST",
+                mode: "no-cors",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: params.toString()
+            });
 
-        // 將資料塞入表單
-        for (let key in data) {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = key;
-            input.value = data[key];
-            form.appendChild(input);
+            alert('同步成功！');
+            setTimeout(() => { location.reload(); }, 1500);
+        } catch (e) {
+            alert('同步失敗');
+            btn.disabled = false;
+            btn.innerText = "同步至雲端並新增";
         }
-
-        // 建立一個隱藏的 iframe 用來接收 Google 的回應
-        let iframe = document.getElementById('hidden_iframe');
-        if (!iframe) {
-            iframe = document.createElement('iframe');
-            iframe.id = 'hidden_iframe';
-            iframe.name = 'hidden_iframe';
-            iframe.style.display = 'none';
-            document.body.appendChild(iframe);
-        }
-
-        document.body.appendChild(form);
-        form.submit(); // 發送
-
-        // 延遲重整頁面
-        setTimeout(() => {
-            alert('同步動作已執行！請檢查試算表。');
-            document.body.removeChild(form);
-            location.reload();
-        }, 2000);
     }
-    // 渲染看板
+
     function renderBoard() {
         const cols = {
             '尚未開始': document.getElementById('col-pending'),
@@ -299,29 +279,30 @@
             '已結束': document.getElementById('col-finished')
         };
 
-        // 清空舊內容 (保留標題)
         Object.values(cols).forEach(c => {
+            if (!c) return;
             const h2 = c.querySelector('h2');
             c.innerHTML = '';
-            c.appendChild(h2);
+            if (h2) c.appendChild(h2);
         });
+
+        // 檢查 activities 是否存在且是陣列
+        if (!activities || !Array.isArray(activities)) return;
 
         activities.forEach(item => {
             const card = document.createElement('div');
             card.className = 'card';
             card.innerHTML = `
-                <div class="card-tag">${item.type}</div>
-                <div class="card-title">${item.name}</div>
-                <div class="card-date">${item.startDate} ~ ${item.endDate}</div>
-                <div class="card-details">${item.details || '無細項備註'}</div>
+                <div class="card-tag">${item.type || '一般'}</div>
+                <div class="card-title">${item.name || '未命名'}</div>
+                <div class="card-date">${item.startDate || ''} ~ ${item.endDate || ''}</div>
+                <div class="card-details">${item.details || ''}</div>
             `;
             
-            if(cols[item.state]) {
-                cols[item.state].appendChild(card);
-            }
+            const targetCol = cols[item.state];
+            if (targetCol) targetCol.appendChild(card);
         });
     }
 </script>
-
 </body>
 </html>
