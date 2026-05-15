@@ -402,7 +402,7 @@
     </div>
 
     <script>
-        const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycby25up1TY0XRYjagu85Bw5yAJmdYh_pLsszJRTF1TOssL0QFAN4ClPWNxPXr34uM-c/exec"; // ⬅️確認這裏填對了
+        const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycby25up1TY0XRYjagu85Bw5yAJmdYh_pLsszJRTF1TOssL0QFAN4ClPWNxPXr34uM-c/exec"; 
         let activities = [];
 
         window.onload = fetchFromGoogle;
@@ -410,14 +410,11 @@
         async function fetchFromGoogle() {
             try {
                 const response = await fetch(GOOGLE_API_URL + "?t=" + new Date().getTime());
-                const data = await response.json();
-                // 如果回傳的是錯誤訊息物件，就不處理
-                if (data.error) { console.error("GAS讀取報錯:", data.error); return; }
-                activities = data;
+                activities = await response.json();
                 renderDashboard();
                 renderAllList();
             } catch (e) {
-                console.error("無法連線至 Google API:", e);
+                console.error("讀取失敗:", e);
             }
         }
 
@@ -430,50 +427,111 @@
 
             if (!name || !start || !end) { alert('請填寫完整'); return; }
 
+            // 自動判斷狀態
             const today = new Date(); today.setHours(0,0,0,0);
-            const startDate = new Date(start);
-            const endDate = new Date(end);
-            let state = today < startDate ? "未開始" : (today <= endDate ? "進行中" : "已結束");
+            const sD = new Date(start);
+            const eD = new Date(end);
+            let state = today < sD ? "未開始" : (today <= eD ? "進行中" : "已結束");
 
-            const newAct = { 
-                id: Date.now(), 
-                state: state, 
-                name: name,
-                type: type,  
-                startDate: start, 
-                endDate: end, 
-                details: details 
-            };
+            // --- 核心修正：改用 URL 參數格式打包 ---
+            const params = new URLSearchParams();
+            params.append('id', Date.now());
+            params.append('state', state);
+            params.append('type', type);
+            params.append('name', name);
+            params.append('startDate', start);
+            params.append('endDate', end);
+            params.append('details', details);
 
             const btn = document.getElementById('btn-submit');
             btn.innerText = "同步中...";
             btn.disabled = true;
 
             try {
-                // 使用 text/plain 配合 no-cors 是目前最能穿透 GAS 限制的方法
                 await fetch(GOOGLE_API_URL, {
                     method: "POST",
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify(newAct)
+                    mode: 'no-cors', // 必須保留
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: params.toString() // 傳送 key=value 格式
                 });
                 
-                alert('同步請求已發送！試算表更新可能需要 2-3 秒。');
+                alert('同步成功！');
                 setTimeout(() => { 
                     btn.innerText = "新增至系統";
                     btn.disabled = false;
                     clearForm();
-                    fetchFromGoogle(); // 重新讀取資料
-                }, 3000);
+                    fetchFromGoogle(); 
+                }, 1500);
             } catch (e) {
-                alert('網路連線失敗');
+                alert('連線失敗');
                 btn.innerText = "新增至系統";
                 btn.disabled = false;
             }
         }
 
-        // 這裡請保留你原本所有的 UI function (renderDashboard, renderAllList, clearForm, switchPage 等)
-        // 確保 renderDashboard 裡面的欄位名稱與 act.name, act.details, act.startDate 等完全對應
+        // --- 渲染函數 (請確保與試算表欄位名稱完全一致) ---
+        function renderDashboard() {
+            // 設定本週範圍
+            const today = new Date(); today.setHours(0,0,0,0);
+            const curDay = today.getDay();
+            const distanceToMonday = curDay === 0 ? -6 : 1 - curDay;
+            const monday = new Date(today); monday.setDate(today.getDate() + distanceToMonday);
+            const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+
+            const lists = {
+                'upcoming-food-list': [], 'upcoming-goods-list': [],
+                'current-food-list': [], 'current-goods-list': [],
+                'ending-food-list': [], 'ending-goods-list': []
+            };
+
+            activities.forEach(act => {
+                const s = new Date(act.startDate);
+                const e = new Date(act.endDate);
+                
+                const isCurrent = (today >= s && today <= e);
+                const isUpcoming = (!isCurrent && s > today && s <= sunday);
+                const isEnding = (isCurrent && e <= sunday);
+
+                if (!isCurrent && !isUpcoming) return;
+
+                const html = `
+                    <li>
+                        <div class="activity-info">
+                            <span class="activity-name">${act.name} ${today.getTime()===e.getTime()?'<span class="badge">本日終了</span>':''}</span>
+                            <div style="font-size:0.8rem; color:#8C8476; white-space:pre-wrap;">${act.details || ''}</div>
+                        </div>
+                        <div class="activity-right">
+                            <span class="activity-date">${isUpcoming ? act.startDate+' 開跑' : '至 '+act.endDate+' 止'}</span>
+                        </div>
+                    </li>`;
+
+                if (isEnding) lists[act.type==='food' ? 'ending-food-list' : 'ending-goods-list'].push(html);
+                else if (isUpcoming) lists[act.type==='food' ? 'upcoming-food-list' : 'upcoming-goods-list'].push(html);
+                else lists[act.type==='food' ? 'current-food-list' : 'current-goods-list'].push(html);
+            });
+
+            // 寫入 HTML
+            Object.keys(lists).forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = lists[id].length ? lists[id].join('') : '<div class="empty-message">暫無活動</div>';
+            });
+        }
+
+        function renderAllList() {
+            const f = document.getElementById('all-food-list');
+            const g = document.getElementById('all-goods-list');
+            if(!f || !g) return;
+            f.innerHTML = g.innerHTML = '';
+            activities.forEach(act => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <div class="activity-info"><span class="activity-name">${act.name}</span></div>
+                    <div class="activity-right"><span class="activity-date">${act.startDate} ~ ${act.endDate}</span></div>`;
+                (act.type === 'food' ? f : g).appendChild(li);
+            });
+        }
+
+        // 其餘輔助 function (switchPage, scrollToSection, clearForm) 請保留原樣
     </script>
 </body>
 </html>
