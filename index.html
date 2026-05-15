@@ -327,7 +327,7 @@
             <div class="form-group-row">
                 <div class="form-group" style="flex: 2;">
                     <label>活動名稱</label>
-                    <input type="text" id="input-name" placeholder="例如：秋季新品在地食材展">
+                    <input type="text" id="input-name" placeholder="例如：生雜25AW終了折扣">
                 </div>
                 <div class="form-group" style="flex: 1;">
                     <label>活動類別</label>
@@ -350,7 +350,7 @@
             </div>
             <div class="form-group">
                 <label>活動品項細項（輸入一項後按 Enter 換行）</label>
-                <textarea id="input-details" rows="3" placeholder="例如：&#10;無油炸即食麵優惠&#10;宇治抹茶入玄米茶"></textarea>
+                <textarea id="input-details" rows="3" placeholder="例如：&#10;午睡&#10;拼接"></textarea>
             </div>
             <div class="btn-container">
                 <button class="submit-btn" id="btn-submit" onclick="saveActivity()">新增至系統</button>
@@ -391,7 +391,7 @@
 
         <div id="page-all" class="page">
             <div id="all-section" class="section">
-                <h2 class="section-title">歷年及未來所有活動</h2>
+                <h2 class="section-title">未來所有活動</h2>
                 <div class="category-title">［ 食品 ］</div>
                 <ul id="all-food-list"></ul>
                 <div class="category-title">［ 生雜 ］</div>
@@ -402,6 +402,19 @@
     </div>
 
     <script>
+
+        // 強效版日期格式化：解決跨時區少一天及長字串問題
+        function toShortDate(dStr) {
+            if (!dStr) return "";
+            let d = new Date(dStr);
+            if (isNaN(d.getTime())) return dStr;
+            
+            // 補償時區差（+8小時），確保顯示的是「當初在選單選的那天」
+            // 這樣 2026-05-19T16:00:00.000Z 就會變回 2026-05-20
+            const localDate = new Date(d.getTime() + (8 * 3600000));
+            return localDate.toISOString().split('T')[0];
+        }
+
         const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycby25up1TY0XRYjagu85Bw5yAJmdYh_pLsszJRTF1TOssL0QFAN4ClPWNxPXr34uM-c/exec";
         let activities = [];
         let editId = null; 
@@ -601,23 +614,8 @@
                 endGoods: document.getElementById('ending-goods-list')
             };
 
+            // 清空舊清單
             Object.values(lists).forEach(l => { if(l) l.innerHTML = ''; });
-
-            // --- 內部輔助函數：將長日期轉換為短日期 YYYY-MM-DD ---
-            // --- 強效版日期格式化：解決跨時區少一天的問題 ---
-            const toShortDate = (dStr) => {
-                if (!dStr) return "";
-                let d = new Date(dStr);
-                
-                // 如果轉換失敗，回傳原始字串
-                if (isNaN(d.getTime())) return dStr;
-
-                // 核心修正：手動加上時區偏移（分鐘轉毫秒），確保顯示的是「當初存入的那天」
-                const userOffset = d.getTimezoneOffset() * 60000;
-                const localDate = new Date(d.getTime() - userOffset);
-                
-                return localDate.toISOString().split('T')[0];
-            };
 
             activities.forEach(act => {
                 const s = new Date(act.startDate);
@@ -628,42 +626,63 @@
 
                 if (!isCurrent && !isUpcoming) return;
 
-                const shortStart = toShortDate(act.startDate);
-                const shortEnd = toShortDate(act.endDate);
+                // --- 處理細項序號 (確保在 act 迴圈內部) ---
+                const detailHtml = act.details ? act.details.split('\n').map((line, index) => {
+                    if (!line.trim()) return ''; 
+                    return `
+                        <div class="detail-item">
+                            <span class="detail-num">${String(index + 1).padStart(2, '0')}</span>
+                            <span class="detail-text">${line}</span>
+                        </div>`;
+                }).join('') : '';
 
                 const li = document.createElement('li');
-                // 修正後的 HTML 模板
                 li.innerHTML = `
                     <div class="activity-info">
                         <span class="activity-name">${act.name}${today.getTime()===e.getTime()?'<span class="badge">本日終了</span>':''}</span>
-                        <div style="font-size:0.85rem; color:#8C8476; white-space:pre-wrap;">${act.details || ''}</div>
+                        <div class="activity-details-container" style="margin-top: 8px;">
+                            ${detailHtml}
+                        </div>
                     </div>
                     <div class="activity-right">
-                        <span class="activity-date">${isUpcoming ? shortStart + ' 開跑' : '～ ' + shortEnd + ' 結束'}</span>
+                        <span class="activity-date">${isUpcoming ? toShortDate(act.startDate) + ' 開跑' : '～ ' + toShortDate(act.endDate) + ' 結束'}</span>
                         <div class="action-links">
                             <a onclick="editActivity('${act.id}')">編輯</a>
                             <a onclick="deleteActivity('${act.id}')" class="delete-link" style="color:#A94444">刪除</a>
                         </div>
                     </div>`;
 
+                // 判斷類別並派發到正確清單
                 const isFood = (act.type === 'food' || act.type === '食品');
                 if (isEnding) (isFood ? lists.endFood : lists.endGoods).appendChild(li);
                 else if (isUpcoming) (isFood ? lists.upFood : lists.upGoods).appendChild(li);
                 else (isFood ? lists.curFood : lists.curGoods).appendChild(li);
             });
         }
-
         function renderAllList() {
             const f = document.getElementById('all-food-list');
             const g = document.getElementById('all-goods-list');
             if(!f || !g) return;
             f.innerHTML = g.innerHTML = '';
+
             activities.forEach(act => {
+                // 處理細項序號邏輯
+                const detailHtml = act.details ? act.details.split('\n').map((line, index) => {
+                    if (!line.trim()) return '';
+                    return `<div class="detail-item">
+                                <span class="detail-num">${String(index + 1).padStart(2, '0')}</span>
+                                <span class="detail-text">${line}</span>
+                            </div>`;
+                }).join('') : '';
+
                 const li = document.createElement('li');
                 li.innerHTML = `
                     <div class="activity-info">
                         <span class="activity-name">${act.name}</span>
-                        <div style="font-size:0.75rem; color:#A69E92;">${act.startDate} ~ ${act.endDate}</div>
+                        <div style="font-size:0.75rem; color:#A69E92; margin-bottom: 6px;">
+                            ${toShortDate(act.startDate)} ~ ${toShortDate(act.endDate)}
+                        </div>
+                        <div class="all-details-list">${detailHtml}</div>
                     </div>
                     <div class="activity-right">
                         <div class="action-links">
@@ -671,6 +690,7 @@
                             <a onclick="deleteActivity('${act.id}')" class="delete-link" style="color:#A94444">刪除</a>
                         </div>
                     </div>`;
+                
                 const isFood = (act.type === 'food' || act.type === '食品');
                 (isFood ? f : g).appendChild(li);
             });
