@@ -404,31 +404,28 @@
     <script>
         const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycby25up1TY0XRYjagu85Bw5yAJmdYh_pLsszJRTF1TOssL0QFAN4ClPWNxPXr34uM-c/exec";
         let activities = [];
+        let editId = null; 
 
-        // 頁面開啟直接執行
         window.onload = function() {
             fetchDataByJSONP();
         };
 
-        // --- 讀取資料：繞過 CORS 的核心方法 ---
+        // --- 1. 讀取功能 ---
         function fetchDataByJSONP() {
             const script = document.createElement('script');
-            // 在網址後加上 callback 參數
             script.src = `${GOOGLE_API_URL}?callback=handleResponse&t=${new Date().getTime()}`;
             document.body.appendChild(script);
-            // 執行完後移除標籤
             script.onload = () => document.body.removeChild(script);
         }
 
-        // 這是 JSONP 接收資料的窗口
         function handleResponse(data) {
-            console.log("資料接收成功:", data);
+            console.log("資料更新成功", data);
             activities = data;
             renderDashboard();
             renderAllList();
         }
 
-        // --- 寫入資料：保持 no-cors (寫入通常不被 CORS 影響，只要資料有進去就好) ---
+        // --- 2. 寫入與修改功能 ---
         async function saveActivity() {
             const name = document.getElementById('input-name').value;
             const type = document.querySelector('input[name="input-type"]:checked').value;
@@ -438,8 +435,23 @@
 
             if (!name || !start || !end) { alert('請填寫完整'); return; }
 
+            // --- 關鍵修正：計算 state ---
+            const today = new Date(); today.setHours(0,0,0,0);
+            const sD = new Date(start);
+            const eD = new Date(end);
+            let state = today < sD ? "未開始" : (today <= eD ? "進行中" : "已結束");
+
             const params = new URLSearchParams();
-            params.append('id', Date.now());
+            
+            // --- 關鍵修正：判斷 action ---
+            if (editId) {
+                params.append('action', 'edit'); // 如果有 editId，告訴 GAS 這是修改
+                params.append('id', editId);
+            } else {
+                params.append('id', Date.now());  // 否則這是新增，給一個新 ID
+            }
+            
+            params.append('state', state);
             params.append('name', name);
             params.append('type', type);
             params.append('startDate', start);
@@ -448,7 +460,8 @@
 
             const btn = document.getElementById('btn-submit');
             btn.innerText = "同步中...";
-            
+            btn.disabled = true;
+
             try {
                 await fetch(GOOGLE_API_URL, {
                     method: "POST",
@@ -457,18 +470,104 @@
                     body: params.toString()
                 });
                 
-                alert('已送出！請等候 2 秒讓資料寫入...');
+                alert(editId ? '修改成功！' : '同步成功！');
+                
                 setTimeout(() => {
-                    btn.innerText = "新增至系統";
+                    editId = null; // 清除編輯狀態
+                    document.getElementById('form-title').innerText = "新增活動資料";
+                    btn.disabled = false;
                     clearForm();
-                    fetchDataByJSONP(); // 重新讀取
-                }, 2000);
+                    fetchDataByJSONP(); // 重新讀取資料
+                }, 1500);
             } catch (e) {
-                alert('寫入連線失敗');
+                alert('連線失敗');
+                btn.disabled = false;
             }
         }
 
-        // (下方 renderDashboard 等 UI 代碼完全保留)
+        // --- 3. 刪除功能 ---
+        async function deleteActivity(id) {
+            if (!confirm('確定要刪除這筆活動嗎？')) return;
+            
+            const params = new URLSearchParams();
+            params.append('action', 'delete');
+            params.append('id', id);
+
+            try {
+                // 使用 POST 方式傳送，配合 no-cors
+                await fetch(GOOGLE_API_URL, {
+                    method: "POST",
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: params.toString()
+                });
+                
+                alert('刪除指令已送出！');
+                setTimeout(() => {
+                    fetchDataByJSONP(); // 重新整理網頁畫面
+                }, 1500);
+            } catch (e) {
+                alert('連線失敗');
+            }
+        }
+
+        // --- 4. 輔助功能 (編輯/清空/跳轉) ---
+        function editActivity(id) {
+            const act = activities.find(a => a.id.toString() === id.toString());
+            if (!act) return;
+
+            editId = id; 
+            document.getElementById('input-name').value = act.name;
+            
+            // --- 關鍵修正：處理日期格式 ---
+            // 確保日期只取前 10 位數 (即 YYYY-MM-DD)
+            if (act.startDate) {
+                const sDate = new Date(act.startDate);
+                const formattedS = sDate.toISOString().split('T')[0];
+                document.getElementById('input-start').value = formattedS;
+            }
+            if (act.endDate) {
+                const eDate = new Date(act.endDate);
+                const formattedE = eDate.toISOString().split('T')[0];
+                document.getElementById('input-end').value = formattedE;
+            }
+            // ----------------------------
+
+            document.getElementById('input-details').value = act.details || "";
+            
+            // 類別判斷
+            const typeRadio = document.querySelector(`input[name="input-type"][value="${act.type}"]`);
+            if(typeRadio) typeRadio.checked = true;
+
+            document.getElementById('btn-submit').innerText = "確認修改資料";
+            document.getElementById('btn-cancel').style.display = "inline-block";
+            document.getElementById('form-title').innerText = "編輯活動資料";
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function clearForm() {
+            document.getElementById('input-name').value = '';
+            document.getElementById('input-start').value = '';
+            document.getElementById('input-end').value = '';
+            document.getElementById('input-details').value = '';
+            document.getElementById('btn-cancel').style.display = 'none';
+            document.getElementById('btn-submit').innerText = "新增至系統";
+            editId = null;
+        }
+
+        function switchPage(pageName) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.getElementById('page-' + pageName).classList.add('active');
+            document.getElementById('tab-' + pageName).classList.add('active');
+        }
+
+        function scrollToSection(id) {
+            const el = document.getElementById(id);
+            if(el) el.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // --- 5. 渲染看板 ---
         function renderDashboard() {
             const today = new Date(); today.setHours(0,0,0,0);
             const curDay = today.getDay();
@@ -485,8 +584,23 @@
                 endGoods: document.getElementById('ending-goods-list')
             };
 
-            // 清空舊清單
             Object.values(lists).forEach(l => { if(l) l.innerHTML = ''; });
+
+            // --- 內部輔助函數：將長日期轉換為短日期 YYYY-MM-DD ---
+            // --- 強效版日期格式化：解決跨時區少一天的問題 ---
+            const toShortDate = (dStr) => {
+                if (!dStr) return "";
+                let d = new Date(dStr);
+                
+                // 如果轉換失敗，回傳原始字串
+                if (isNaN(d.getTime())) return dStr;
+
+                // 核心修正：手動加上時區偏移（分鐘轉毫秒），確保顯示的是「當初存入的那天」
+                const userOffset = d.getTimezoneOffset() * 60000;
+                const localDate = new Date(d.getTime() - userOffset);
+                
+                return localDate.toISOString().split('T')[0];
+            };
 
             activities.forEach(act => {
                 const s = new Date(act.startDate);
@@ -497,19 +611,28 @@
 
                 if (!isCurrent && !isUpcoming) return;
 
+                const shortStart = toShortDate(act.startDate);
+                const shortEnd = toShortDate(act.endDate);
+
                 const li = document.createElement('li');
+                // 修正後的 HTML 模板
                 li.innerHTML = `
                     <div class="activity-info">
                         <span class="activity-name">${act.name}${today.getTime()===e.getTime()?'<span class="badge">本日終了</span>':''}</span>
                         <div style="font-size:0.85rem; color:#8C8476; white-space:pre-wrap;">${act.details || ''}</div>
                     </div>
                     <div class="activity-right">
-                        <span class="activity-date">${isUpcoming ? act.startDate+' 開跑' : '至 '+act.endDate+' 止'}</span>
+                        <span class="activity-date">${isUpcoming ? shortStart + ' 開跑' : '～ ' + shortEnd + ' 結束'}</span>
+                        <div class="action-links">
+                            <a onclick="editActivity('${act.id}')">編輯</a>
+                            <a onclick="deleteActivity('${act.id}')" class="delete-link" style="color:#A94444">刪除</a>
+                        </div>
                     </div>`;
 
-                if (isEnding) (act.type==='食品' ? lists.endFood : lists.endGoods).appendChild(li);
-                else if (isUpcoming) (act.type==='食品' ? lists.upFood : lists.upGoods).appendChild(li);
-                else (act.type==='食品' ? lists.curFood : lists.curGoods).appendChild(li);
+                const isFood = (act.type === 'food' || act.type === '食品');
+                if (isEnding) (isFood ? lists.endFood : lists.endGoods).appendChild(li);
+                else if (isUpcoming) (isFood ? lists.upFood : lists.upGoods).appendChild(li);
+                else (isFood ? lists.curFood : lists.curGoods).appendChild(li);
             });
         }
 
@@ -521,9 +644,18 @@
             activities.forEach(act => {
                 const li = document.createElement('li');
                 li.innerHTML = `
-                    <div class="activity-info"><span class="activity-name">${act.name}</span></div>
-                    <div class="activity-right"><span class="activity-date">${act.startDate} ~ ${act.endDate}</span></div>`;
-                (act.type==='food' ? f : g).appendChild(li);
+                    <div class="activity-info">
+                        <span class="activity-name">${act.name}</span>
+                        <div style="font-size:0.75rem; color:#A69E92;">${act.startDate} ~ ${act.endDate}</div>
+                    </div>
+                    <div class="activity-right">
+                        <div class="action-links">
+                            <a onclick="editActivity('${act.id}')">編輯</a>
+                            <a onclick="deleteActivity('${act.id}')" class="delete-link" style="color:#A94444">刪除</a>
+                        </div>
+                    </div>`;
+                const isFood = (act.type === 'food' || act.type === '食品');
+                (isFood ? f : g).appendChild(li);
             });
         }
     </script>
