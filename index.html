@@ -469,6 +469,63 @@
         }
 
         // (下方 renderDashboard 等 UI 代碼完全保留)
+        function renderDashboard() {
+            const today = new Date(); today.setHours(0,0,0,0);
+            const curDay = today.getDay();
+            const distance = curDay === 0 ? -6 : 1 - curDay;
+            const monday = new Date(today); monday.setDate(today.getDate() + distance);
+            const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+
+            const lists = {
+                upFood: document.getElementById('upcoming-food-list'),
+                upGoods: document.getElementById('upcoming-goods-list'),
+                curFood: document.getElementById('current-food-list'),
+                curGoods: document.getElementById('current-goods-list'),
+                endFood: document.getElementById('ending-food-list'),
+                endGoods: document.getElementById('ending-goods-list')
+            };
+
+            // 清空舊清單
+            Object.values(lists).forEach(l => { if(l) l.innerHTML = ''; });
+
+            activities.forEach(act => {
+                const s = new Date(act.startDate);
+                const e = new Date(act.endDate);
+                const isCurrent = (today >= s && today <= e);
+                const isUpcoming = (!isCurrent && s > today && s <= sunday);
+                const isEnding = (isCurrent && e <= sunday);
+
+                if (!isCurrent && !isUpcoming) return;
+
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <div class="activity-info">
+                        <span class="activity-name">${act.name}${today.getTime()===e.getTime()?'<span class="badge">本日終了</span>':''}</span>
+                        <div style="font-size:0.85rem; color:#8C8476; white-space:pre-wrap;">${act.details || ''}</div>
+                    </div>
+                    <div class="activity-right">
+                        <span class="activity-date">${isUpcoming ? act.startDate+' 開跑' : '至 '+act.endDate+' 止'}</span>
+                    </div>`;
+
+                if (isEnding) (act.type==='食品' ? lists.endFood : lists.endGoods).appendChild(li);
+                else if (isUpcoming) (act.type==='食品' ? lists.upFood : lists.upGoods).appendChild(li);
+                else (act.type==='食品' ? lists.curFood : lists.curGoods).appendChild(li);
+            });
+        }
+
+        function renderAllList() {
+            const f = document.getElementById('all-food-list');
+            const g = document.getElementById('all-goods-list');
+            if(!f || !g) return;
+            f.innerHTML = g.innerHTML = '';
+            activities.forEach(act => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <div class="activity-info"><span class="activity-name">${act.name}</span></div>
+                    <div class="activity-right"><span class="activity-date">${act.startDate} ~ ${act.endDate}</span></div>`;
+                (act.type==='food' ? f : g).appendChild(li);
+            });
+        }
     </script>
 </body>
 </html>
