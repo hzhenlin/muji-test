@@ -435,30 +435,46 @@
 
             if (!name || !start || !end) { alert('請填寫完整'); return; }
 
-            // --- 關鍵修正：計算 state ---
+            // --- 修正點 1：日期格式化 (確保新增時也是 YYYY-MM-DD) ---
+            // 這樣可以避免 Google 試算表誤判時區或格式
+            const formatDate = (dateStr) => {
+                if (!dateStr) return "";
+                const d = new Date(dateStr);
+                return d.getFullYear() + '-' + 
+                    String(d.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(d.getDate()).padStart(2, '0');
+            };
+
+            const formattedStart = formatDate(start);
+            const formattedEnd = formatDate(end);
+
+            // 計算狀態
             const today = new Date(); today.setHours(0,0,0,0);
-            const sD = new Date(start);
-            const eD = new Date(end);
+            const sD = new Date(formattedStart);
+            const eD = new Date(formattedEnd);
             let state = today < sD ? "未開始" : (today <= eD ? "進行中" : "已結束");
 
             const params = new URLSearchParams();
             
-            // --- 關鍵修正：判斷 action ---
+            // --- 修正點 2：嚴格對齊 GAS 的接收順序 ---
             if (editId) {
-                params.append('action', 'edit'); // 如果有 editId，告訴 GAS 這是修改
+                params.append('action', 'edit');
                 params.append('id', editId);
             } else {
-                params.append('id', Date.now());  // 否則這是新增，給一個新 ID
+                params.append('id', Date.now()); // 新增時產生唯一 ID
             }
             
+            // ⚠️ 這裡的順序必須與 GAS 中的 rowData = [p.id, p.state, p.type, p.name...] 完全一致
             params.append('state', state);
-            params.append('name', name);
             params.append('type', type);
-            params.append('startDate', start);
-            params.append('endDate', end);
+            params.append('name', name);
+            
+            params.append('startDate', formattedStart);
+            params.append('endDate', formattedEnd);
             params.append('details', details);
 
             const btn = document.getElementById('btn-submit');
+            const originalText = btn.innerText;
             btn.innerText = "同步中...";
             btn.disabled = true;
 
@@ -470,21 +486,22 @@
                     body: params.toString()
                 });
                 
-                alert(editId ? '修改成功！' : '同步成功！');
+                alert(editId ? '修改成功！' : '新增成功！');
                 
                 setTimeout(() => {
-                    editId = null; // 清除編輯狀態
+                    editId = null;
                     document.getElementById('form-title').innerText = "新增活動資料";
+                    btn.innerText = originalText;
                     btn.disabled = false;
                     clearForm();
-                    fetchDataByJSONP(); // 重新讀取資料
+                    fetchDataByJSONP(); // 重新整理畫面
                 }, 1500);
             } catch (e) {
                 alert('連線失敗');
+                btn.innerText = originalText;
                 btn.disabled = false;
             }
         }
-
         // --- 3. 刪除功能 ---
         async function deleteActivity(id) {
             if (!confirm('確定要刪除這筆活動嗎？')) return;
