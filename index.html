@@ -310,11 +310,21 @@
 <body>
 
     <div class="sidebar" id="看板側邊欄">
-        <div class="sidebar-title">快速跳轉</div>
-        <div class="sidebar-nav">
-            <button class="sidebar-link" onclick="scrollToSection('upcoming-section')">↳ 即將開始</button>
-            <button class="sidebar-link" onclick="scrollToSection('current-section')" style="color: #4A5644; font-weight: 500;">↳ 進行中</button>
-            <button class="sidebar-link" onclick="scrollToSection('ending-section')">↳ 即將結束</button>
+        <div id="sidebar-home-group">
+            <div class="sidebar-title">首頁跳轉</div>
+            <div class="sidebar-nav">
+                <button class="sidebar-link" onclick="scrollToSection('upcoming-section')">↳ 即將開始</button>
+                <button class="sidebar-link" onclick="scrollToSection('current-section')" style="color: #4A5644; font-weight: 500;">↳ 進行中</button>
+                <button class="sidebar-link" onclick="scrollToSection('ending-section')">↳ 即將結束</button>
+            </div>
+        </div>
+
+        <div id="sidebar-all-group" style="display: none; margin-top: 15px;">
+            <div class="sidebar-title">所有活動跳轉</div>
+            <div class="sidebar-nav">
+                <button class="sidebar-link" onclick="scrollToSection('all-section-current')" style="color: #7F0019; font-weight: 500;">↳ 進行中</button>
+                <button class="sidebar-link" onclick="scrollToSection('all-section-upcoming')" style="color: #8C8476;">↳ 未開始</button>
+            </div>
         </div>
     </div>
 
@@ -596,22 +606,44 @@
         }
 
         function switchPage(pageName) {
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            // 1. 強制隱藏所有分頁，並移除 active 類名（防疊加核心）
+            document.querySelectorAll('.page').forEach(p => {
+                p.classList.remove('active');
+                p.style.display = 'none'; // 確保每一頁都被隱藏
+            });
             
+            // 移除所有頁籤的選取狀態
+            document.querySelectorAll('.tab-button').forEach(b => {
+                b.classList.remove('active');
+            });
+            
+            // 2. 顯示目標分頁與頁籤
             const targetPage = document.getElementById('page-' + pageName);
             const targetTab = document.getElementById('tab-' + pageName);
             
-            if (targetPage) targetPage.classList.add('active');
-            if (targetTab) targetTab.classList.add('active');
+            if (targetPage) {
+                targetPage.classList.add('active');
+                targetPage.style.display = 'block'; // 只讓目標分頁顯示
+            }
+            if (targetTab) {
+                targetTab.classList.add('active');
+            }
 
-            // 關鍵：切換到所有活動頁面時，觸發渲染
+            // 3. 連動切換側邊欄的按鈕群組與重新渲染
+            const homeSidebar = document.getElementById('sidebar-home-group');
+            const allSidebar = document.getElementById('sidebar-all-group');
+
             if (pageName === 'all') {
-                renderAllList();
+                if (homeSidebar) homeSidebar.style.display = 'none';
+                if (allSidebar) allSidebar.style.display = 'block';
+                renderAllList(); // 渲染所有活動頁面
             } else {
-                renderDashboard();
+                if (homeSidebar) homeSidebar.style.display = 'block';
+                if (allSidebar) allSidebar.style.display = 'none';
+                renderDashboard(); // 渲染首頁看板
             }
         }
+
         function scrollToSection(id) {
             const el = document.getElementById(id);
             if(el) el.scrollIntoView({ behavior: 'smooth' });
@@ -636,6 +668,14 @@
 
             // 清空舊清單
             Object.values(lists).forEach(l => { if(l) l.innerHTML = ''; });
+
+            if (!activities || activities.length === 0) {
+                // 如果連總資料都是空的，讓所有區塊顯示暫無活動
+                Object.values(lists).forEach(ul => {
+                    if (ul) ul.innerHTML = '<div class="empty-message">暫無活動</div>';
+                });
+                return;
+            }
 
             activities.forEach(act => {
                 const s = new Date(act.startDate);
@@ -677,6 +717,14 @@
                 if (isEnding) (isFood ? lists.endFood : lists.endGoods).appendChild(li);
                 else if (isUpcoming) (isFood ? lists.upFood : lists.upGoods).appendChild(li);
                 else (isFood ? lists.curFood : lists.curGoods).appendChild(li);
+            });
+            
+
+            // 3. 核心新增：檢查 6 個區塊，只要是空的就補上「暫無活動」
+            Object.values(lists).forEach(ul => {
+                if (ul && ul.innerHTML === '') {
+                    ul.innerHTML = '<div class="empty-message">暫無活動</div>';
+                }
             });
         }
         function renderAllList() {
